@@ -42,6 +42,10 @@
 #define TV_PAL 312
 #define TV_NTSC 262
 extern int tv_mode;
+#define FPS_PAL 49.8607597
+/*49.8607597 = (4.43361875*(4/5)*1000000)/(312*228)*/
+#define FPS_NTSC 59.9227434
+/*59.9227434 = (3.579545*1000000)/(262*228)*/
 
 /* Dimensions of atari_screen.
    atari_screen is ATARI_WIDTH * ATARI_HEIGHT bytes.

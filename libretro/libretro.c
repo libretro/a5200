@@ -24,6 +24,7 @@
 #include "altirra_5200_os.h"
 #include "atari.h"
 #include "cartridge.h"
+#include "gtia.h"
 #include "input.h"
 #include "pia.h"
 #include "pokeysnd.h"
@@ -194,6 +195,7 @@ enum analog_device_type
 
 static unsigned input_shift_ctrl       = 0;
 static enum input_hack_type input_hack = INPUT_HACK_NONE;
+static int input_pause_is_reset        = 0;
 static int input_analog_deadzone       = (int)(0.15f * (float)LIBRETRO_ANALOG_RANGE);
 static bool input_analog_quadratic     = false;
 static enum analog_device_type analog_device = ANALOG_DEVICE_ANALOG_STICK;
@@ -216,6 +218,8 @@ static bool a5200_use_official_bios = true;
 static bool libretro_supports_bitmasks = false;
 
 extern UBYTE PCPOT_input[8];
+extern void ANTIC_UpdateArtifacting(void);
+extern int global_artif_mode;
 
 static int min(int a, int b)
 {
@@ -620,6 +624,25 @@ static void check_bios_variable(void)
       a5200_use_official_bios = false;
 }
 
+/* Pokey driver option must be checked once
+ * (and only once) before system is initalized */
+static void check_pokey_variable(void)
+{
+    struct retro_variable var = { 0 };
+
+    /* High Fidelity Pokey */
+    var.key = "a5200_enable_new_pokey";
+    var.value = NULL;
+    POKEYSND_enable_new_pokey = true;
+
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+        !string_is_empty(var.value) &&
+        string_is_equal(var.value, "disabled"))
+        POKEYSND_enable_new_pokey = false;
+
+    a5200_log(RETRO_LOG_INFO, "High Fidelity Pokey: %s\n", var.value);
+}
+
 static void check_variables(void)
 {
    struct retro_variable var = {0};
@@ -646,6 +669,36 @@ static void check_variables(void)
    }
 
    init_frame_blending(blend_method);
+
+   /* Set artifacting type.  */
+   var.key = "a5200_artifacting_mode";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+       if (strcmp(var.value, "none") == 0)
+       {
+           global_artif_mode = 0;
+       }
+       if (strcmp(var.value, "blue/brown 1") == 0)
+       {
+           global_artif_mode = 1;
+       }
+       else if (strcmp(var.value, "blue/brown 2") == 0)
+       {
+           global_artif_mode = 2;
+       }
+       else if (strcmp(var.value, "GTIA") == 0)
+       {
+           global_artif_mode = 3;
+       }
+       else if (strcmp(var.value, "CTIA") == 0)
+       {
+           global_artif_mode = 4;
+       }
+
+       ANTIC_UpdateArtifacting();
+   }
 
    /* Audio Filter */
    var.key                = "a5200_low_pass_filter";
@@ -681,6 +734,18 @@ static void check_variables(void)
          input_hack = INPUT_HACK_DUAL_STICK;
       else if (string_is_equal(var.value, "swap_ports"))
          input_hack = INPUT_HACK_SWAP_PORTS;
+   }
+
+   /* Pause is Reset */
+   var.key = "a5200_pause_is_reset";
+   var.value = NULL;
+   input_pause_is_reset = 0;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+       !string_is_empty(var.value))
+   {
+       if (string_is_equal(var.value, "enabled"))
+           input_pause_is_reset = 1;
    }
 
    /* Digital Joystick Sensitivity */
@@ -777,6 +842,13 @@ static void check_variables(void)
 
 static INLINE unsigned int a5200_get_analog_pot(int input)
 {
+    /*  Might implement this some other way
+    * 
+        //mm 5200 is checking for trackball.. send A5200_JOY_CENTER to force trackball_
+        if (consol_mask == 0x0f)
+            return A5200_JOY_CENTER;
+    */
+
    /* Convert to amplitude */
    float amplitude = (float)((input > input_analog_deadzone) ?
          (input - input_analog_deadzone) :
@@ -992,7 +1064,7 @@ static void update_input(void)
 
       /* Start/pause */
       if (joypad_bits & (1 << RETRO_DEVICE_ID_JOYPAD_SELECT))
-         key_code += AKEY_5200_PAUSE;
+         key_code += input_pause_is_reset ? AKEY_5200_RESET : AKEY_5200_PAUSE;
       else if (joypad_bits & (1 << RETRO_DEVICE_ID_JOYPAD_START))
          key_code += AKEY_5200_START;
       /* Number pad */
@@ -1328,7 +1400,7 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 size_t retro_serialize_size(void) 
 {
-   return A5200_SAVE_STATE_SIZE;
+   return A5200_SAVE_STATE_SIZE*2;
 }
 
 bool retro_serialize(void *data, size_t size)
@@ -1356,6 +1428,7 @@ bool retro_load_game(const struct retro_game_info *info)
    const struct retro_game_info_ext *info_ext = NULL;
    enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
 
+   check_variables();
    /* a5200 requires a persistent ROM data buffer */
    rom_buf  = NULL;
    rom_data = NULL;
@@ -1397,6 +1470,8 @@ bool retro_load_game(const struct retro_game_info *info)
 
    /* Load bios */
    check_bios_variable();
+   check_pokey_variable();
+
    load_bios();
 
    /* Load game */
@@ -1559,7 +1634,8 @@ void retro_deinit(void)
 
 void retro_reset(void)
 {
-   Warmstart();
+   /* really should be coldstart, not warmstart */
+   Coldstart();
 }
 
 void retro_run(void)

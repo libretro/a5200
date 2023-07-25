@@ -2,7 +2,7 @@
  * pokeysnd.c - POKEY sound chip emulation, v2.4
  *
  * Copyright (C) 1996-1998 Ron Fries
- * Copyright (C) 1998-2006 Atari800 development team (see DOC/CREDITS)
+ * Copyright (C) 1998-2014 Atari800 development team (see DOC/CREDITS)
  *
  * This file is part of the Atari800 emulator project which emulates
  * the Atari 400, 800, 800XL, 130XE, and 5200 8-bit computers.
@@ -19,40 +19,61 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Atari800; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#include "config.h"
 
-#include "atari.h"
+#include "config.h"
+#include <stdlib.h>
+#include <math.h>
+
+#include "mzpokeysnd.h"
 #include "pokeysnd.h"
+#if defined(PBI_XLD) || defined (VOICEBOX)
+#include "votraxsnd.h"
+#endif
+#include "antic.h"
+#include "gtia.h"
+#include "util.h"
 
 #ifdef WORDS_UNALIGNED_OK
-#  define READ_U32(x)     (*(uint32 *) (x))
-#  define WRITE_U32(x, d) (*(uint32 *) (x) = (d))
+#  define READ_U32(x)     (*(uint32_t *) (x))
+#  define WRITE_U32(x, d) (*(uint32_t *) (x) = (d))
 #else
-#    define READ_U32(x) \
-  ((*(unsigned char *) (x)) | ((*((unsigned char *) (x) + 1)) << 8) | \
-  ((*((unsigned char *) (x) + 2)) << 16) | ((*((unsigned char *) (x) + 3)) << 24))
+#  ifdef WORDS_BIGENDIAN
+#    define READ_U32(x) (((*(unsigned char *)(x)) << 24) | ((*((unsigned char *)(x) + 1)) << 16) | \
+                        ((*((unsigned char *)(x) + 2)) << 8) | ((*((unsigned char *)(x) + 3))))
 #    define WRITE_U32(x, d) \
   { \
-  uint32 i = d; \
+  uint32_t i = d; \
+  (*(unsigned char *) (x)) = (((i) >> 24) & 255); \
+  (*((unsigned char *) (x) + 1)) = (((i) >> 16) & 255); \
+  (*((unsigned char *) (x) + 2)) = (((i) >> 8) & 255); \
+  (*((unsigned char *) (x) + 3)) = ((i) & 255); \
+  }
+#  else
+#    define READ_U32(x) ((*(unsigned char *) (x)) | ((*((unsigned char *) (x) + 1)) << 8) | \
+                        ((*((unsigned char *) (x) + 2)) << 16) | ((*((unsigned char *) (x) + 3)) << 24))
+#    define WRITE_U32(x, d) \
+  { \
+  uint32_t i = d; \
   (*(unsigned char *)(x)) = ((i) & 255); \
   (*((unsigned char *)(x) + 1)) = (((i) >> 8) & 255); \
   (*((unsigned char *)(x) + 2)) = (((i) >> 16) & 255); \
   (*((unsigned char *)(x) + 3)) = (((i) >> 24) & 255); \
   }
+#  endif
 #endif
 
 /* GLOBAL VARIABLE DEFINITIONS */
 
 /* number of pokey chips currently emulated */
-static uint8 Num_pokeys;
+static UBYTE Num_pokeys;
 
-static uint8 AUDV[4 * MAXPOKEYS];	/* Channel volume - derived */
+static UBYTE pokeysnd_AUDV[4 * MAXPOKEYS];	/* Channel volume - derived */
 
-static uint8 Outbit[4 * MAXPOKEYS];		/* current state of the output (high or low) */
+static UBYTE Outbit[4 * MAXPOKEYS];		/* current state of the output (high or low) */
 
-static uint8 Outvol[4 * MAXPOKEYS];		/* last output volume for each channel */
+static UBYTE Outvol[4 * MAXPOKEYS];		/* last output volume for each channel */
 
 /* Initialize the bit patterns for the polynomials. */
 
@@ -61,57 +82,113 @@ static uint8 Outvol[4 * MAXPOKEYS];		/* last output volume for each channel */
 /* single bit per byte keeps the math simple, which is important for */
 /* efficient processing. */
 
-static uint8 bit4[POLY4_SIZE] =
+static UBYTE bit4[POLY4_SIZE] =
 #ifndef POKEY23_POLY
 {1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0};	/* new table invented by Perry */
 #else
 {1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0};	/* original POKEY 2.3 table */
 #endif
 
-static uint8 bit5[POLY5_SIZE] =
+static UBYTE bit5[POLY5_SIZE] =
 #ifndef POKEY23_POLY
 {1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0};
 #else
 {0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1};
 #endif
 
-static uint32 P4 = 0,			/* Global position pointer for the 4-bit  POLY array */
+static uint32_t P4 = 0,			/* Global position pointer for the 4-bit  POLY array */
  P5 = 0,						/* Global position pointer for the 5-bit  POLY array */
  P9 = 0,						/* Global position pointer for the 9-bit  POLY array */
  P17 = 0;						/* Global position pointer for the 17-bit POLY array */
 
-static uint32 Div_n_cnt[4 * MAXPOKEYS],		/* Divide by n counter. one for each channel */
+static uint32_t Div_n_cnt[4 * MAXPOKEYS],		/* Divide by n counter. one for each channel */
  Div_n_max[4 * MAXPOKEYS];		/* Divide by n maximum, one for each channel */
 
-static uint32 Samp_n_max,		/* Sample max.  For accuracy, it is *256 */
- Samp_n_cnt[2] __attribute__ ((aligned (4)));					/* Sample cnt. */
+static uint32_t Samp_n_max,		/* Sample max.  For accuracy, it is *256 */
+ Samp_n_cnt[2];					/* Sample cnt. */
 
 #ifdef INTERPOLATE_SOUND
-static uint16 last_val = 0;		/* last output value */
+static UWORD last_val = 0;		/* last output value */
+#ifdef STEREO_SOUND
+static UWORD last_val2 = 0;	/* last output value */
+#endif
 #endif
 
 /* Volume only emulations declarations */
+int	POKEYSND_sampbuf_val[POKEYSND_SAMPBUF_MAX];	/* volume values */
+int	POKEYSND_sampbuf_cnt[POKEYSND_SAMPBUF_MAX];	/* relative start time */
+int	POKEYSND_sampbuf_ptr = 0;		/* pointer to sampbuf */
+int	POKEYSND_sampbuf_rptr = 0;		/* pointer to read from sampbuf */
+int	POKEYSND_sampbuf_last = 0;		/* last absolute time */
+int	POKEYSND_sampbuf_AUDV[4 * MAXPOKEYS];	/* prev. channel volume */
+int	POKEYSND_sampbuf_lastval = 0;		/* last volume */
+int	POKEYSND_sampout;			/* last out volume */
+int	POKEYSND_samp_freq;
+int	POKEYSND_samp_consol_val = 0;		/* actual value of console sound */
 
-#define	SAMPBUF_MAX	2000
-int	sampbuf_val[SAMPBUF_MAX];	/* volume values */
-int	sampbuf_cnt[SAMPBUF_MAX];	/* relative start time */
-int	sampbuf_ptr = 0;		/* pointer to sampbuf */
-int	sampbuf_rptr = 0;		/* pointer to read from sampbuf */
-int	sampbuf_last = 0;		/* last absolute time */
-int	sampbuf_AUDV[4 * MAXPOKEYS];	/* prev. channel volume */
-int	sampbuf_lastval = 0;		/* last volume */
-int	sampout;			/* last out volume */
-uint16  samp_freq;
-int	samp_consol_val = 0;		/* actual value of console sound */
+static uint32_t snd_freq17 = FREQ_17_EXACT;
+int POKEYSND_playback_freq = 44100;
+UBYTE POKEYSND_num_pokeys = 1;
+int POKEYSND_snd_flags = 0;
+static int mz_quality = 0;		/* default quality for mzpokeysnd */
 
-int stereo_enabled   = FALSE;
+int POKEYSND_enable_new_pokey = TRUE;
+int POKEYSND_bienias_fix = TRUE;  /* when TRUE, high frequencies get emulated: better sound but slower */
+#if defined(__PLUS) && !defined(_WX_)
+#define BIENIAS_FIX (g_Sound.nBieniasFix)
+#else
+#define BIENIAS_FIX POKEYSND_bienias_fix
+#endif
+
+int POKEYSND_stereo_enabled = FALSE;
+
+int POKEYSND_volume = 0x100;
 
 /* multiple sound engine interface */
+static void pokeysnd_process_8(void *sndbuffer, int sndn);
+static void pokeysnd_process_16(void *sndbuffer, int sndn);
+static void null_pokey_process(void *sndbuffer, int sndn) {}
+void (*POKEYSND_Process_ptr)(void *sndbuffer, int sndn) = null_pokey_process;
 
-static void Update_pokey_sound_rf(uint16, uint8, uint8, uint8);
-static void null_pokey_sound(uint16 addr, uint8 val, uint8 chip, uint8 gain) {}
-void (*Update_pokey_sound) (uint16 addr, uint8 val, uint8 chip, uint8 gain)
+static void Update_pokey_sound_rf(UWORD, UBYTE, UBYTE, UBYTE);
+static void null_pokey_sound(UWORD addr, UBYTE val, UBYTE chip, UBYTE gain) {}
+void (*POKEYSND_Update_ptr) (UWORD addr, UBYTE val, UBYTE chip, UBYTE gain)
   = null_pokey_sound;
+
+#ifdef SERIO_SOUND
+static void Update_serio_sound_rf(int out, UBYTE data);
+static void null_serio_sound(int out, UBYTE data) {}
+void (*POKEYSND_UpdateSerio)(int out, UBYTE data) = null_serio_sound;
+int POKEYSND_serio_sound_enabled = 1;
+#endif
+
+#ifdef CONSOLE_SOUND
+static void Update_consol_sound_rf(int set);
+static void null_consol_sound(int set) {}
+void (*POKEYSND_UpdateConsol_ptr)(int set) = null_consol_sound;
+int POKEYSND_console_sound_enabled = 1;
+extern int atari_speaker;
+#endif
+
+static void Update_vol_only_sound_rf(void);
+static void null_vol_only_sound(void) {}
+void (*POKEYSND_UpdateVolOnly)(void) = null_vol_only_sound;
+
+#ifdef SYNCHRONIZED_SOUND
+UBYTE *POKEYSND_process_buffer = NULL;
+unsigned int POKEYSND_process_buffer_length;
+unsigned int POKEYSND_process_buffer_fill;
+static unsigned int prev_update_tick;
+
+static void Generate_sync_rf(unsigned int num_ticks);
+static void null_generate_sync(unsigned int num_ticks) {}
+void (*POKEYSND_GenerateSync)(unsigned int num_ticks) = null_generate_sync;
+
+static double ticks_per_sample;
+static double samp_pos;
+static int speaker;
+static int const CONSOLE_VOL = 32;
+#endif /* SYNCHRONIZED_SOUND */
 
 /*****************************************************************************/
 /* In my routines, I treat the sample output as another divide by N counter  */
@@ -127,7 +204,7 @@ void (*Update_pokey_sound) (uint16 addr, uint8 val, uint8 chip, uint8 gain)
 /* fraction   whole    whole    whole      whole   unused   unused   unused  */
 /*                                                                           */
 /* Samp_n_cnt[0] gives me a 32-bit int 24 whole bits with 8 fractional bits, */
-/* while (uint32 *)((uint8 *)(&Samp_n_cnt[0])+1) gives me the 32-bit whole   */
+/* while (uint32_t *)((UBYTE *)(&Samp_n_cnt[0])+1) gives me the 32-bit whole   */
 /* number only.                                                              */
 /*                                                                           */
 /* Representation on big-endian machines:                                    */
@@ -135,13 +212,13 @@ void (*Update_pokey_sound) (uint16 addr, uint8 val, uint8 chip, uint8 gain)
 /*  unused   unused   unused    whole      whole    whole    whole  fraction */
 /*                                                                           */
 /* Samp_n_cnt[1] gives me a 32-bit int 24 whole bits with 8 fractional bits, */
-/* while (uint32 *)((uint8 *)(&Samp_n_cnt[0])+3) gives me the 32-bit whole   */
+/* while (uint32_t *)((UBYTE *)(&Samp_n_cnt[0])+3) gives me the 32-bit whole   */
 /* number only.                                                              */
 /*****************************************************************************/
 
 
 /*****************************************************************************/
-/* Module:  Pokey_sound_init()                                               */
+/* Module:  pokeysnd_init_rf()                                              */
 /* Purpose: to handle the power-up initialization functions                  */
 /*          these functions should only be executed on a cold-restart        */
 /*                                                                           */
@@ -155,14 +232,141 @@ void (*Update_pokey_sound) (uint16 addr, uint8 val, uint8 chip, uint8 gain)
 /* Outputs: Adjusts local globals - no return value                          */
 /*                                                                           */
 /*****************************************************************************/
-void 
-Pokey_sound_init(uint32 freq17, uint16 playback_freq, uint8 num_pokeys,
-		unsigned int flags)
-{
-	uint8 chan;
-	Update_pokey_sound = Update_pokey_sound_rf;
 
-	samp_freq = playback_freq;
+static int pokeysnd_init_rf(uint32_t freq17, int playback_freq,
+           UBYTE num_pokeys, int flags);
+
+/* Initialise variables related to volume-only sound. */
+static void init_vol_only(void)
+{
+	POKEYSND_sampbuf_rptr = POKEYSND_sampbuf_ptr;
+	POKEYSND_sampbuf_last = cpu_clock;
+	POKEYSND_sampbuf_lastval = 0;
+	POKEYSND_samp_consol_val = 0;
+#ifdef STEREO_SOUND
+	sampbuf_rptr2 = sampbuf_ptr2;
+	sampbuf_last2 = cpu_clock;
+	sampbuf_lastval2 = 0;
+#endif /* STEREO_SOUND */
+}
+
+//int POKEYSND_DoInit(void)
+Pokey_sound_init(uint32_t freq17, UWORD playback_freq, UBYTE num_pokeys, unsigned int flags)
+{
+	//SndSave_CloseSoundFile();
+
+	init_vol_only();
+
+	if (POKEYSND_enable_new_pokey)
+		MZPOKEYSND_Init(freq17, playback_freq, num_pokeys, flags, mz_quality);
+	else
+		pokeysnd_init_rf(freq17, playback_freq, num_pokeys, flags);
+
+	return;
+}
+
+#if 0
+int POKEYSND_Init(uint32_t freq17, int playback_freq, UBYTE num_pokeys,
+                     int flags
+)
+{
+	snd_freq17 = freq17;
+	POKEYSND_playback_freq = playback_freq;
+	POKEYSND_num_pokeys = num_pokeys;
+	POKEYSND_snd_flags = flags;
+#ifdef SYNCHRONIZED_SOUND
+	{
+		/* A single call to Atari800_Frame may emulate a bit more CPU ticks than the exact number of
+		   ticks per frame (Atari800_tv_mode*114). So we add a few ticks to buffer size just to be safe. */
+		unsigned int const surplus_ticks = 10;
+		double samples_per_frame = (double)POKEYSND_playback_freq/(Atari800_tv_mode == Atari800_TV_PAL ? Atari800_FPS_PAL : Atari800_FPS_NTSC);
+		unsigned int ticks_per_frame = Atari800_tv_mode*114;
+		unsigned int max_ticks_per_frame = ticks_per_frame + surplus_ticks;
+		double ticks_per_sample = (double)ticks_per_frame / samples_per_frame;
+		POKEYSND_process_buffer_length = POKEYSND_num_pokeys * (unsigned int)ceil((double)max_ticks_per_frame / ticks_per_sample) * ((POKEYSND_snd_flags & POKEYSND_BIT16) ? 2:1);
+		free(POKEYSND_process_buffer);
+		POKEYSND_process_buffer = (UBYTE *)Util_malloc(POKEYSND_process_buffer_length);
+		POKEYSND_process_buffer_fill = 0;
+	    prev_update_tick = cpu_clock;
+	}
+#endif /* SYNCHRONIZED_SOUND */
+
+#if defined(PBI_XLD) || defined (VOICEBOX)
+	VOTRAXSND_Init(playback_freq, num_pokeys, (flags & POKEYSND_BIT16));
+#endif
+	return POKEYSND_DoInit();
+}
+#endif
+
+void POKEYSND_SetMzQuality(int quality)	/* specially for win32, perhaps not needed? */
+{
+	mz_quality = quality;
+}
+
+void Pokey_process(void *sndbuffer, int sndn)
+{
+	POKEYSND_Process_ptr(sndbuffer, sndn);
+#if defined(PBI_XLD) || defined (VOICEBOX)
+	VOTRAXSND_Process(sndbuffer,sndn);
+#endif
+#if !defined(__PLUS) && !defined(ASAP)
+	//SndSave_WriteToSoundFile((const unsigned char *)sndbuffer, sndn);
+#endif
+}
+
+#ifdef SYNCHRONIZED_SOUND
+static void Update_synchronized_sound(void)
+{
+	POKEYSND_GenerateSync(cpu_clock - prev_update_tick);
+	prev_update_tick = cpu_clock;
+}
+
+int POKEYSND_UpdateProcessBuffer(void)
+{
+	int sndn;
+	Update_synchronized_sound();
+	sndn = POKEYSND_process_buffer_fill / ((POKEYSND_snd_flags & POKEYSND_BIT16) ? 2 : 1);
+	POKEYSND_process_buffer_fill = 0;
+
+#if defined(PBI_XLD) || defined (VOICEBOX)
+	VOTRAXSND_Process(POKEYSND_process_buffer, sndn);
+#endif
+#if !defined(__PLUS) && !defined(ASAP)
+	//SndSave_WriteToSoundFile((const unsigned char *)POKEYSND_process_buffer, sndn);
+#endif
+	return sndn;
+}
+#endif /* SYNCHRONIZED_SOUND */
+
+#ifdef SYNCHRONIZED_SOUND
+static void init_syncsound(void)
+{
+	double samples_per_frame = (double)POKEYSND_playback_freq/(tv_mode == TV_PAL ? FPS_PAL : FPS_NTSC);
+	unsigned int ticks_per_frame = tv_mode*114;
+	ticks_per_sample = (double)ticks_per_frame / samples_per_frame;
+	samp_pos = 0.0;
+	POKEYSND_GenerateSync = Generate_sync_rf;
+	speaker = 0;
+}
+#endif /* SYNCHRONIZED_SOUND */
+
+static int pokeysnd_init_rf(uint32_t freq17, int playback_freq,
+           UBYTE num_pokeys, int flags)
+{
+	UBYTE chan;
+
+	POKEYSND_Update_ptr = Update_pokey_sound_rf;
+#ifdef SERIO_SOUND
+	POKEYSND_UpdateSerio = Update_serio_sound_rf;
+#endif
+#ifdef CONSOLE_SOUND
+	POKEYSND_UpdateConsol_ptr = Update_consol_sound_rf;
+#endif
+	POKEYSND_UpdateVolOnly = Update_vol_only_sound_rf;
+
+	POKEYSND_Process_ptr = (flags & POKEYSND_BIT16) ? pokeysnd_process_16 : pokeysnd_process_8;
+
+	POKEYSND_samp_freq = playback_freq;
 
 	/* start all of the polynomial counters at zero */
 	P4 = 0;
@@ -171,7 +375,7 @@ Pokey_sound_init(uint32 freq17, uint16 playback_freq, uint8 num_pokeys,
 	P17 = 0;
 
 	/* calculate the sample 'divide by N' value based on the playback freq. */
-	Samp_n_max = ((uint32) freq17 << 8) / playback_freq;
+	Samp_n_max = ((uint32_t) freq17 << 8) / playback_freq;
 
 	Samp_n_cnt[0] = 0;			/* initialize all bits of the sample */
 	Samp_n_cnt[1] = 0;			/* 'divide by N' counter */
@@ -181,16 +385,22 @@ Pokey_sound_init(uint32 freq17, uint16 playback_freq, uint8 num_pokeys,
 		Outbit[chan] = 0;
 		Div_n_cnt[chan] = 0;
 		Div_n_max[chan] = 0x7fffffffL;
-		AUDV[chan] = 0;
-		sampbuf_AUDV[chan] = 0;
+		pokeysnd_AUDV[chan] = 0;
+		POKEYSND_sampbuf_AUDV[chan] = 0;
 	}
 
 	/* set the number of pokey chips currently emulated */
 	Num_pokeys = num_pokeys;
+
+#ifdef SYNCHRONIZED_SOUND
+	init_syncsound();
+#endif
+	return 0; /* OK */
 }
 
+
 /*****************************************************************************/
-/* Module:  Update_pokey_sound()                                             */
+/* Module:  Update_pokey_sound_rf()                                          */
 /* Purpose: To process the latest control values stored in the AUDF, AUDC,   */
 /*          and AUDCTL registers.  It pre-calculates as much information as  */
 /*          possible for better performance.  This routine has not been      */
@@ -208,51 +418,69 @@ Pokey_sound_init(uint32 freq17, uint16 playback_freq, uint8 num_pokeys,
 /*                                                                           */
 /*****************************************************************************/
 
-static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain)
+void POKEYSND_Update(UWORD addr, UBYTE val, UBYTE chip, UBYTE gain)
 {
-	uint32 new_val = 0;
-	uint8 chan;
-	uint8 chan_mask;
-	uint8 chip_offs;
+#ifdef SYNCHRONIZED_SOUND
+    Update_synchronized_sound();
+#endif /* SYNCHRONIZED_SOUND */
+	POKEYSND_Update_ptr(addr, val, chip, gain);
+}
+
+static void Update_pokey_sound_rf(UWORD addr, UBYTE val, UBYTE chip,
+				  UBYTE gain)
+{
+	uint32_t new_val = 0;
+	UBYTE chan;
+	UBYTE chan_mask;
+	UBYTE chip_offs;
 
 	/* calculate the chip_offs for the channel arrays */
 	chip_offs = chip << 2;
 
 	/* determine which address was changed */
 	switch (addr & 0x0f) {
-	case _AUDF1:
+	case OFFSET_AUDF1:
+		/* AUDF[CHAN1 + chip_offs] = val; */
 		chan_mask = 1 << CHAN1;
-		if (AUDCTL[chip] & CH1_CH2) /* if ch 1&2 tied together */
-			chan_mask |= 1 << CHAN2; /* then also change on ch2 */
+		if (AUDCTL[chip] & CH1_CH2)		/* if ch 1&2 tied together */
+			chan_mask |= 1 << CHAN2;	/* then also change on ch2 */
 		break;
-	case _AUDC1:
-		AUDV[CHAN1 + chip_offs] = (val & VOLUME_MASK) * gain;
+	case OFFSET_AUDC1:
+		/* AUDC[CHAN1 + chip_offs] = val; */
+		pokeysnd_AUDV[CHAN1 + chip_offs] = (val & VOLUME_MASK) * gain;
 		chan_mask = 1 << CHAN1;
 		break;
-	case _AUDF2:
+	case OFFSET_AUDF2:
+		/* AUDF[CHAN2 + chip_offs] = val; */
 		chan_mask = 1 << CHAN2;
 		break;
-	case _AUDC2:
-		AUDV[CHAN2 + chip_offs] = (val & VOLUME_MASK) * gain;
+	case OFFSET_AUDC2:
+		/* AUDC[CHAN2 + chip_offs] = val; */
+		pokeysnd_AUDV[CHAN2 + chip_offs] = (val & VOLUME_MASK) * gain;
 		chan_mask = 1 << CHAN2;
 		break;
-	case _AUDF3:
+	case OFFSET_AUDF3:
+		/* AUDF[CHAN3 + chip_offs] = val; */
 		chan_mask = 1 << CHAN3;
-		if (AUDCTL[chip] & CH3_CH4) /* if ch 3&4 tied together */
-			chan_mask |= 1 << CHAN4; /* then also change on ch4 */
+		if (AUDCTL[chip] & CH3_CH4)		/* if ch 3&4 tied together */
+			chan_mask |= 1 << CHAN4;	/* then also change on ch4 */
 		break;
-	case _AUDC3:
-		AUDV[CHAN3 + chip_offs] = (val & VOLUME_MASK) * gain;
+	case OFFSET_AUDC3:
+		/* AUDC[CHAN3 + chip_offs] = val; */
+		pokeysnd_AUDV[CHAN3 + chip_offs] = (val & VOLUME_MASK) * gain;
 		chan_mask = 1 << CHAN3;
 		break;
-	case _AUDF4:
+	case OFFSET_AUDF4:
+		/* AUDF[CHAN4 + chip_offs] = val; */
 		chan_mask = 1 << CHAN4;
 		break;
-	case _AUDC4:
-		AUDV[CHAN4 + chip_offs] = (val & VOLUME_MASK) * gain;
+	case OFFSET_AUDC4:
+		/* AUDC[CHAN4 + chip_offs] = val; */
+		pokeysnd_AUDV[CHAN4 + chip_offs] = (val & VOLUME_MASK) * gain;
 		chan_mask = 1 << CHAN4;
 		break;
-	case _AUDCTL:
+	case OFFSET_AUDCTL:
+		/* AUDCTL[chip] = val; */
 		chan_mask = 15;			/* all channels */
 		break;
 	default:
@@ -349,29 +577,50 @@ static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain
 	/* if channel is volume only, set current output */
 	for (chan = CHAN1; chan <= CHAN4; chan++) {
 		if (chan_mask & (1 << chan)) {
-
 			if ((AUDC[chan + chip_offs] & VOL_ONLY)) {
- 
-	  		{
-					sampbuf_lastval += AUDV[chan + chip_offs]
-						-sampbuf_AUDV[chan + chip_offs];
 
-					sampbuf_val[sampbuf_ptr] = sampbuf_lastval;
-					sampbuf_AUDV[chan + chip_offs] = AUDV[chan + chip_offs];
-					sampbuf_cnt[sampbuf_ptr] =
-						(cpu_clock - sampbuf_last) * 128 * samp_freq / 178979;
-					sampbuf_last = cpu_clock;
-					sampbuf_ptr++;
-					if (sampbuf_ptr >= SAMPBUF_MAX)
-						sampbuf_ptr = 0;
-					if (sampbuf_ptr == sampbuf_rptr) {
-						sampbuf_rptr++;
-						if (sampbuf_rptr >= SAMPBUF_MAX)
-							sampbuf_rptr = 0;
+#ifdef STEREO_SOUND
+
+				if (chip & 0x01)
+				{
+					sampbuf_lastval2 += pokeysnd_AUDV[chan + chip_offs]
+						- POKEYSND_sampbuf_AUDV[chan + chip_offs];
+
+					sampbuf_val2[sampbuf_ptr2] = sampbuf_lastval2;
+					POKEYSND_sampbuf_AUDV[chan + chip_offs] = pokeysnd_AUDV[chan + chip_offs];
+					sampbuf_cnt2[sampbuf_ptr2] =
+						(cpu_clock - sampbuf_last2) * 128 * POKEYSND_samp_freq / 178979;
+					sampbuf_last2 = cpu_clock;
+					sampbuf_ptr2++;
+					if (sampbuf_ptr2 >= POKEYSND_SAMPBUF_MAX)
+						sampbuf_ptr2 = 0;
+					if (sampbuf_ptr2 == sampbuf_rptr2) {
+						sampbuf_rptr2++;
+						if (sampbuf_rptr2 >= POKEYSND_SAMPBUF_MAX)
+							sampbuf_rptr2 = 0;
+					}
+				}
+				else
+#endif /* STEREO_SOUND */
+				{
+					POKEYSND_sampbuf_lastval += pokeysnd_AUDV[chan + chip_offs]
+						-POKEYSND_sampbuf_AUDV[chan + chip_offs];
+
+					POKEYSND_sampbuf_val[POKEYSND_sampbuf_ptr] = POKEYSND_sampbuf_lastval;
+					POKEYSND_sampbuf_AUDV[chan + chip_offs] = pokeysnd_AUDV[chan + chip_offs];
+					POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_ptr] =
+						(cpu_clock - POKEYSND_sampbuf_last) * 128 * POKEYSND_samp_freq / 178979;
+					POKEYSND_sampbuf_last = cpu_clock;
+					POKEYSND_sampbuf_ptr++;
+					if (POKEYSND_sampbuf_ptr >= POKEYSND_SAMPBUF_MAX)
+						POKEYSND_sampbuf_ptr = 0;
+					if (POKEYSND_sampbuf_ptr == POKEYSND_sampbuf_rptr) {
+						POKEYSND_sampbuf_rptr++;
+						if (POKEYSND_sampbuf_rptr >= POKEYSND_SAMPBUF_MAX)
+							POKEYSND_sampbuf_rptr = 0;
 					}
 				}
 			}
-
 
 			/* I've disabled any frequencies that exceed the sampling
 			   frequency.  There isn't much point in processing frequencies
@@ -383,6 +632,7 @@ static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain
 			/* or the channel freq is greater than the playback freq */
 			if ( (AUDC[chan + chip_offs] & VOL_ONLY) ||
 				((AUDC[chan + chip_offs] & VOLUME_MASK) == 0)
+				|| (!BIENIAS_FIX && (Div_n_max[chan + chip_offs] < (Samp_n_max >> 8)))
 				) {
 				/* indicate the channel is 'on' */
 				Outvol[chan + chip_offs] = 1;
@@ -392,6 +642,7 @@ static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain
 					(chan == CHAN4 && !(AUDCTL[chip] & CH2_FILTER)) ||
 					(chan == CHAN1) ||
 					(chan == CHAN2)
+					|| (!BIENIAS_FIX && (Div_n_max[chan + chip_offs] < (Samp_n_max >> 8)))
 				) {
 					/* and set channel freq to max to reduce processing */
 					Div_n_max[chan + chip_offs] = 0x7fffffffL;
@@ -400,10 +651,13 @@ static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain
 			}
 		}
 	}
+
+	/*    _enable(); */ /* RSF - removed for portability 31-MAR-97 */
 }
 
+
 /*****************************************************************************/
-/* Module:  Pokey_process()                                                  */
+/* Module:  pokeysnd_process()                                                  */
 /* Purpose: To fill the output buffer with the sound output based on the     */
 /*          pokey chip parameters.                                           */
 /*                                                                           */
@@ -412,7 +666,9 @@ static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain
 /*                                                                           */
 /* Inputs:  *buffer - pointer to the buffer where the audio output will      */
 /*                    be placed                                              */
-/*          n - size of the playback buffer                                  */
+/*          sndn - for mono, size of the playback buffer in samples          */
+/*                 for stereo, size of the playback buffer in left samples   */
+/*                    plus right samples.                                    */
 /*          num_pokeys - number of currently active pokeys to process        */
 /*                                                                           */
 /* Outputs: the buffer will be filled with n bytes of audio - no return val  */
@@ -420,33 +676,51 @@ static void Update_pokey_sound_rf(uint16 addr, uint8 val, uint8 chip, uint8 gain
 /*                                                                           */
 /*****************************************************************************/
 
-void Pokey_process(void *sndbuffer, unsigned sndn)
+static void pokeysnd_process_8(void *sndbuffer, int sndn)
 {
-	register char *buffer = (char  *) sndbuffer;
-	register uint16 n = sndn;
+	register UBYTE *buffer = (UBYTE *) sndbuffer;
+	register int n = sndn;
 
-	register uint32 *div_n_ptr;
-	register uint8 *samp_cnt_w_ptr;
-	register uint32 event_min;
-	register uint8 next_event;
-	register int16 cur_val;		/* then we have to count as 16-bit signed */
-	register uint8 *out_ptr;
-	register uint8 audc;
-	register uint8 toggle;
-	register uint8 count;
-	register uint8 *vol_ptr;
+	register uint32_t *div_n_ptr;
+	register UBYTE *samp_cnt_w_ptr;
+	register uint32_t event_min;
+	register UBYTE next_event;
+#ifdef CLIP_SOUND
+	register SWORD cur_val;		/* then we have to count as 16-bit signed */
+#ifdef STEREO_SOUND
+	register SWORD cur_val2;
+#endif
+#else /* CLIP_SOUND */
+	register UBYTE cur_val;		/* otherwise we'll simplify as 8-bit unsigned */
+#ifdef STEREO_SOUND
+	register UBYTE cur_val2;
+#endif
+#endif /* CLIP_SOUND */
+	register UBYTE *out_ptr;
+	register UBYTE audc;
+	register UBYTE toggle;
+	register UBYTE count;
+	register UBYTE *vol_ptr;
 
 	/* set a pointer to the whole portion of the samp_n_cnt */
-	samp_cnt_w_ptr = ((uint8 *) (&Samp_n_cnt[0]) + 1);
+#ifdef WORDS_BIGENDIAN
+	samp_cnt_w_ptr = ((UBYTE *) (&Samp_n_cnt[0]) + 3);
+#else
+	samp_cnt_w_ptr = ((UBYTE *) (&Samp_n_cnt[0]) + 1);
+#endif
 
 	/* set a pointer for optimization */
 	out_ptr = Outvol;
-	vol_ptr = AUDV;
+	vol_ptr = pokeysnd_AUDV;
 
 	/* The current output is pre-determined and then adjusted based on each */
 	/* output change for increased performance (less over-all math). */
 	/* add the output values of all 4 channels */
-	cur_val = SAMP_MIN;
+	cur_val = POKEYSND_SAMP_MIN;
+#ifdef STEREO_SOUND
+	cur_val2 = POKEYSND_SAMP_MIN;
+#endif /* STEREO_SOUND */
+
 	count = Num_pokeys;
 	do {
 		if (*out_ptr++)
@@ -464,8 +738,36 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 		if (*out_ptr++)
 			cur_val += *vol_ptr;
 		vol_ptr++;
+#ifdef STEREO_SOUND
+		{
+			count--;
+			if (count) {
+				if (*out_ptr++)
+					cur_val2 += *vol_ptr;
+				vol_ptr++;
+
+				if (*out_ptr++)
+					cur_val2 += *vol_ptr;
+				vol_ptr++;
+
+				if (*out_ptr++)
+					cur_val2 += *vol_ptr;
+				vol_ptr++;
+
+				if (*out_ptr++)
+					cur_val2 += *vol_ptr;
+				vol_ptr++;
+			}
+			else
+				break;
+		}
+#endif /* STEREO_SOUND */
 		count--;
 	} while (count);
+
+#ifdef SYNCHRONIZED_SOUND
+	cur_val += speaker;
+#endif
 
 	/* loop until the buffer is filled */
 	while (n) {
@@ -594,7 +896,12 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 					if (Outvol[next_event & 0xfd]) {
 						/* if on, turn it off */
 						Outvol[next_event & 0xfd] = 0;
-						cur_val -= AUDV[next_event & 0xfd];
+#ifdef STEREO_SOUND
+						if ((next_event & 0x04))
+							cur_val2 -= pokeysnd_AUDV[next_event & 0xfd];
+						else
+#endif /* STEREO_SOUND */
+							cur_val -= pokeysnd_AUDV[next_event & 0xfd];
 					}
 				}
 			}
@@ -607,7 +914,12 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 					if (Outvol[next_event & 0xfd]) {
 						/* if on, turn it off */
 						Outvol[next_event & 0xfd] = 0;
-						cur_val -= AUDV[next_event & 0xfd];
+#ifdef STEREO_SOUND
+						if ((next_event & 0x04))
+							cur_val2 -= pokeysnd_AUDV[next_event & 0xfd];
+						else
+#endif /* STEREO_SOUND */
+							cur_val -= pokeysnd_AUDV[next_event & 0xfd];
 					}
 				}
 			}
@@ -616,7 +928,12 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 			if (toggle) {
 				if (*out_ptr) {
 					/* remove this channel from the signal */
-					cur_val -= AUDV[next_event];
+#ifdef STEREO_SOUND
+					if ((next_event & 0x04))
+						cur_val2 -= pokeysnd_AUDV[next_event];
+					else
+#endif /* STEREO_SOUND */
+						cur_val -= pokeysnd_AUDV[next_event];
 
 					/* and turn the output off */
 					*out_ptr = 0;
@@ -626,7 +943,12 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 					*out_ptr = 1;
 
 					/* and add it to the output signal */
-					cur_val += AUDV[next_event];
+#ifdef STEREO_SOUND
+					if ((next_event & 0x04))
+						cur_val2 += pokeysnd_AUDV[next_event];
+					else
+#endif /* STEREO_SOUND */
+						cur_val += pokeysnd_AUDV[next_event];
 				}
 			}
 		}
@@ -635,6 +957,9 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 			   which includes an 8 bit fraction for accuracy */
 
 			int iout;
+#ifdef STEREO_SOUND
+			int iout2;
+#endif
 #ifdef INTERPOLATE_SOUND
 			if (cur_val != last_val) {
 				if (*Samp_n_cnt < Samp_n_max) {		/* need interpolation */
@@ -648,41 +973,289 @@ void Pokey_process(void *sndbuffer, unsigned sndn)
 			}
 			else
 				iout = cur_val;
+#ifdef STEREO_SOUND
+			if (cur_val2 != last_val2) {
+				if (*Samp_n_cnt < Samp_n_max) {		/* need interpolation */
+					iout2 = (cur_val2 * (*Samp_n_cnt) +
+							last_val2 * (Samp_n_max - *Samp_n_cnt))
+						/ Samp_n_max;
+				}
+				else
+					iout2 = cur_val2;
+				last_val2 = cur_val2;
+			}
+			else
+				iout2 = cur_val2;
+#endif  /* STEREO_SOUND */
 #else   /* INTERPOLATE_SOUND */
 			iout = cur_val;
+#ifdef STEREO_SOUND
+			iout2 = cur_val2;
+#endif  /* STEREO_SOUND */
 #endif  /* INTERPOLATE_SOUND */
 
 			{
-				if (sampbuf_rptr != sampbuf_ptr) {
+				if (POKEYSND_sampbuf_rptr != POKEYSND_sampbuf_ptr) {
 					int l;
-					if (sampbuf_cnt[sampbuf_rptr] > 0)
-						sampbuf_cnt[sampbuf_rptr] -= 1280;
-					while ((l = sampbuf_cnt[sampbuf_rptr]) <= 0) {
-						sampout = sampbuf_val[sampbuf_rptr];
-						sampbuf_rptr++;
-						if (sampbuf_rptr >= SAMPBUF_MAX)
-							sampbuf_rptr = 0;
-						if (sampbuf_rptr != sampbuf_ptr)
-							sampbuf_cnt[sampbuf_rptr] += l;
+					if (POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_rptr] > 0)
+						POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_rptr] -= 1280;
+					while ((l = POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_rptr]) <= 0) {
+						POKEYSND_sampout = POKEYSND_sampbuf_val[POKEYSND_sampbuf_rptr];
+						POKEYSND_sampbuf_rptr++;
+						if (POKEYSND_sampbuf_rptr >= POKEYSND_SAMPBUF_MAX)
+							POKEYSND_sampbuf_rptr = 0;
+						if (POKEYSND_sampbuf_rptr != POKEYSND_sampbuf_ptr)
+							POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_rptr] += l;
 						else
 							break;
 					}
 				}
-				iout += sampout;
+				iout += POKEYSND_sampout;
+#ifdef STEREO_SOUND
+				{
+					if (sampbuf_rptr2 != sampbuf_ptr2) {
+						int l;
+						if (sampbuf_cnt2[sampbuf_rptr2] > 0)
+							sampbuf_cnt2[sampbuf_rptr2] -= 1280;
+						while ((l = sampbuf_cnt2[sampbuf_rptr2]) <= 0) {
+							sampout2 = sampbuf_val2[sampbuf_rptr2];
+							sampbuf_rptr2++;
+							if (sampbuf_rptr2 >= POKEYSND_SAMPBUF_MAX)
+								sampbuf_rptr2 = 0;
+							if (sampbuf_rptr2 != sampbuf_ptr2)
+								sampbuf_cnt2[sampbuf_rptr2] += l;
+							else
+								break;
+						}
+					}
+					iout2 += sampout2;
+				}
+#endif  /* STEREO_SOUND */
 			}
 
-			if (iout > SAMP_MAX)	/* then check high limit */
-				*buffer++ = (uint8) SAMP_MAX;	/* and limit if greater */
-			else if (iout < SAMP_MIN) /* else check low limit */
-				*buffer++ = (uint8) SAMP_MIN;	/* and limit if less */
-			else /* otherwise use raw value */
-				*buffer++ = (uint8) iout;
+#ifdef CLIP_SOUND
+			if (iout > POKEYSND_SAMP_MAX) {	/* then check high limit */
+				*buffer++ = (UBYTE) POKEYSND_SAMP_MAX;	/* and limit if greater */
+			}
+			else if (iout < POKEYSND_SAMP_MIN) {		/* else check low limit */
+				*buffer++ = (UBYTE) POKEYSND_SAMP_MIN;	/* and limit if less */
+			}
+			else {				/* otherwise use raw value */
+				*buffer++ = (UBYTE) iout;
+			}
+#ifdef STEREO_SOUND
+			if (Num_pokeys > 1) {
+				if ((POKEYSND_stereo_enabled ? iout2 : iout) > POKEYSND_SAMP_MAX) {	/* then check high limit */
+					*buffer++ = (UBYTE) POKEYSND_SAMP_MAX;	/* and limit if greater */
+				}
+				else if ((POKEYSND_stereo_enabled ? iout2 : iout) < POKEYSND_SAMP_MIN) {		/* else check low limit */
+					*buffer++ = (UBYTE) POKEYSND_SAMP_MIN;	/* and limit if less */
+				}
+				else {				/* otherwise use raw value */
+					*buffer++ = (UBYTE) (POKEYSND_stereo_enabled ? iout2 : iout);
+				}
+			}
+#endif /* STEREO_SOUND */
+#else /* CLIP_SOUND */
+			*buffer++ = (UBYTE) iout;	/* clipping not selected, use value */
+#ifdef STEREO_SOUND
+			if (Num_pokeys > 1)
+				*buffer++ = (UBYTE) (POKEYSND_stereo_enabled ? iout2 : iout);
+#endif /* STEREO_SOUND */
+#endif /* CLIP_SOUND */
 
+#ifdef WORDS_BIGENDIAN
+			*(Samp_n_cnt + 1) += Samp_n_max;
+#else
 			*Samp_n_cnt += Samp_n_max;
+#endif
 			/* and indicate one less byte in the buffer */
 			n--;
+#ifdef STEREO_SOUND
+			if (Num_pokeys > 1)
+				n--;
+#endif
 		}
 	}
-	if (sampbuf_rptr == sampbuf_ptr)
-		sampbuf_last = cpu_clock;
+	{
+		if (POKEYSND_sampbuf_rptr == POKEYSND_sampbuf_ptr)
+			POKEYSND_sampbuf_last = cpu_clock;
+#ifdef STEREO_SOUND
+		if (sampbuf_rptr2 == sampbuf_ptr2)
+			sampbuf_last2 = cpu_clock;
+#endif /* STEREO_SOUND */
+	}
+}
+
+#ifdef SERIO_SOUND
+static void Update_serio_sound_rf(int out, UBYTE data)
+{
+	int bits, pv, future;
+	if (!POKEYSND_serio_sound_enabled) return;
+
+	pv = 0;
+	future = 0;
+	bits = (data << 1) | 0x200;
+	while (bits)
+	{
+		POKEYSND_sampbuf_lastval -= pv;
+		pv = (bits & 0x01) * pokeysnd_AUDV[3];	/* FIXME!!! - set volume from AUDV */
+		POKEYSND_sampbuf_lastval += pv;
+
+	POKEYSND_sampbuf_val[POKEYSND_sampbuf_ptr] = POKEYSND_sampbuf_lastval;
+	POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_ptr] =
+		(cpu_clock + future-POKEYSND_sampbuf_last) * 128 * POKEYSND_samp_freq / 178979;
+	POKEYSND_sampbuf_last = cpu_clock + future;
+	POKEYSND_sampbuf_ptr++;
+	if (POKEYSND_sampbuf_ptr >= POKEYSND_SAMPBUF_MAX )
+		POKEYSND_sampbuf_ptr = 0;
+	if (POKEYSND_sampbuf_ptr == POKEYSND_sampbuf_rptr ) {
+		POKEYSND_sampbuf_rptr++;
+		if (POKEYSND_sampbuf_rptr >= POKEYSND_SAMPBUF_MAX)
+			POKEYSND_sampbuf_rptr = 0;
+	}
+		/* 1789790/19200 = 93 */
+		future += 93;	/* ~ 19200 bit/s - FIXME!!! set speed form AUDF [2] ??? */
+		bits >>= 1;
+	}
+	POKEYSND_sampbuf_lastval -= pv;
+}
+#endif /* SERIO_SOUND */
+
+void POKEYSND_SetVolume(int vol)
+{
+    if (vol > 100)
+        vol = 100;
+    if (vol < 0)
+        vol = 0;
+
+    POKEYSND_volume = vol * 0x100 / 100;
+}
+
+static void pokeysnd_process_16(void *sndbuffer, int sndn)
+{
+	UWORD *buffer = (UWORD *) sndbuffer;
+	int i;
+
+	pokeysnd_process_8(buffer, sndn);
+
+	for (i = sndn - 1; i >= 0; i--) {
+#ifndef POKEYSND_SIGNED_SAMPLES
+		int smp = ((int) (((UBYTE *) buffer)[i]) - 0x80) * POKEYSND_volume;
+#else
+		int smp = ((int) ((SBYTE *) buffer)[i]) * POKEYSND_volume;
+#endif
+
+		if (smp > 32767)
+			smp = 32767;
+		else if (smp < -32768)
+			smp = -32768;
+
+		buffer[i] = smp;
+	}
+}
+
+#ifdef SYNCHRONIZED_SOUND
+static void Generate_sync_rf(unsigned int num_ticks)
+{
+	double new_samp_pos;
+	unsigned int ticks;
+	UBYTE *buffer = POKEYSND_process_buffer + POKEYSND_process_buffer_fill;
+	UBYTE *buffer_end = POKEYSND_process_buffer + POKEYSND_process_buffer_length;
+
+	for (;;) {
+		double int_part;
+		new_samp_pos = samp_pos + ticks_per_sample;
+		new_samp_pos = modf(new_samp_pos, &int_part);
+		ticks = (unsigned int)int_part;
+		if (ticks > num_ticks) {
+			samp_pos -= num_ticks;
+			break;
+		}
+		if (buffer >= buffer_end)
+			break;
+
+		samp_pos = new_samp_pos;
+		num_ticks -= ticks;
+
+		if (POKEYSND_snd_flags & POKEYSND_BIT16) {
+			pokeysnd_process_16(buffer, POKEYSND_num_pokeys);
+			buffer += 2 * POKEYSND_num_pokeys;
+		}
+		else {
+			pokeysnd_process_8(buffer, POKEYSND_num_pokeys);
+			buffer += POKEYSND_num_pokeys;
+		}
+
+	}
+
+	POKEYSND_process_buffer_fill = buffer - POKEYSND_process_buffer;
+}
+#endif /* SYNCHRONIZED_SOUND */
+
+#ifdef CONSOLE_SOUND
+void POKEYSND_UpdateConsol(int set)
+{
+	if (!POKEYSND_console_sound_enabled)
+		return;
+#ifdef SYNCHRONIZED_SOUND
+	if (set)
+		Update_synchronized_sound();
+#endif /* SYNCHRONIZED_SOUND */
+	POKEYSND_UpdateConsol_ptr(set);
+}
+
+static void Update_consol_sound_rf(int set)
+{
+#ifdef SYNCHRONIZED_SOUND
+	if (set)
+		speaker = CONSOLE_VOL * atari_speaker;
+#elif defined(VOL_ONLY_SOUND)
+	static int prev_atari_speaker = 0;
+	static unsigned int prev_cpu_clock = 0;
+	int d;
+
+	if (!set && POKEYSND_samp_consol_val == 0)
+		return;
+	POKEYSND_sampbuf_lastval -= POKEYSND_samp_consol_val;
+	if (prev_atari_speaker != atari_speaker) {
+		POKEYSND_samp_consol_val = atari_speaker * 8 * 4;	/* gain */
+		prev_cpu_clock = cpu_clock;
+	}
+	else if (!set) {
+		d = cpu_clock - prev_cpu_clock;
+		if (d < 114) {
+			POKEYSND_sampbuf_lastval += POKEYSND_samp_consol_val;
+			return;
+		}
+		while (d >= 114 /* CPUL */) {
+			POKEYSND_samp_consol_val = POKEYSND_samp_consol_val * 99 / 100;
+			d -= 114;
+		}
+		prev_cpu_clock = cpu_clock - d;
+	}
+	POKEYSND_sampbuf_lastval += POKEYSND_samp_consol_val;
+	prev_atari_speaker = atari_speaker;
+
+	POKEYSND_sampbuf_val[POKEYSND_sampbuf_ptr] = POKEYSND_sampbuf_lastval;
+	POKEYSND_sampbuf_cnt[POKEYSND_sampbuf_ptr] =
+		(cpu_clock - POKEYSND_sampbuf_last) * 128 * POKEYSND_samp_freq / 178979;
+	POKEYSND_sampbuf_last = cpu_clock;
+	POKEYSND_sampbuf_ptr++;
+	if (POKEYSND_sampbuf_ptr >= POKEYSND_SAMPBUF_MAX)
+		POKEYSND_sampbuf_ptr = 0;
+	if (POKEYSND_sampbuf_ptr == POKEYSND_sampbuf_rptr) {
+		POKEYSND_sampbuf_rptr++;
+		if (POKEYSND_sampbuf_rptr >= POKEYSND_SAMPBUF_MAX)
+			POKEYSND_sampbuf_rptr = 0;
+	}
+#endif /* !SYNCHRONIZED_SOUND && VOL_ONLY_SOUND */
+}
+#endif /* CONSOLE_SOUND */
+
+static void Update_vol_only_sound_rf(void)
+{
+#ifdef CONSOLE_SOUND
+	POKEYSND_UpdateConsol(0);	/* mmm */
+#endif /* CONSOLE_SOUND */
 }

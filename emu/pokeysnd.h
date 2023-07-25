@@ -11,7 +11,8 @@
 /*                          big/little endian #defines, removed <dos.h>,     */
 /*                          conditional defines for TRUE/FALSE               */
 /* 01/19/98 - Ron Fries - Changed signed/unsigned sample support to a        */
-/*                        compile-time option.    */
+/*                        compile-time option.  Defaults to unsigned -       */
+/*                        define SIGNED_SAMPLES to create signed.            */
 /*                                                                           */
 /*****************************************************************************/
 /*                                                                           */
@@ -29,34 +30,18 @@
 /* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Library */
 /* General Public License for more details.                                  */
 /* To obtain a copy of the GNU Library General Public License, write to the  */
-/* Free Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.   */
+/* Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.   */
 /*                                                                           */
 /* Any permitted reproduction of these routines, in whole or in part, must   */
 /* bear this legend.                                                         */
 /*                                                                           */
 /*****************************************************************************/
 
-#ifndef _POKEYSOUND_H
-#define _POKEYSOUND_H
-
-#include <stdint.h>
+#ifndef POKEYSND_H_
+#define POKEYSND_H_
 
 #include "config.h"
 #include "pokey.h"
-
-#ifndef _TYPEDEF_H
-#define _TYPEDEF_H
-
-/* define some data types to keep it platform independent */
-#define int8  int8_t
-#define int16 int16_t
-#define int32 int32_t
-
-#define uint8  uint8_t
-#define uint16 uint16_t
-#define uint32 uint32_t
-
-#endif
 
 /* CONSTANT DEFINITIONS */
 
@@ -75,31 +60,80 @@
    by 0.127%.  (More than likely, an actual unit will vary by this much!) */
 
 #define FREQ_17_EXACT     1789790	/* exact 1.79 MHz clock freq */
-#define FREQ_17_APPROX    1787520	/* approximate 1.79 MHz clock freq */
+#define POKEYSND_FREQ_17_APPROX    1787520	/* approximate 1.79 MHz clock freq */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define SAMP_MAX 255			/* else set unsigned 8-bit clip ranges */
-#define SAMP_MIN 0
-#define SAMP_MID 128
+	/* #define SIGNED_SAMPLES */ /* define for signed output */
+
+#ifdef  POKEYSND_SIGNED_SAMPLES			/* if signed output selected */
+#define POKEYSND_SAMP_MAX 127			/* then set signed 8-bit clipping ranges */
+#define POKEYSND_SAMP_MIN -128
+#define POKEYSND_SAMP_MID 0
+#else
+#define POKEYSND_SAMP_MAX 255			/* else set unsigned 8-bit clip ranges */
+#define POKEYSND_SAMP_MIN 0
+#define POKEYSND_SAMP_MID 128
+#endif
 
 /* init flags */
-#define SND_BIT16	1
-#define SND_STEREO	2
+#define POKEYSND_BIT16	1
 
-extern int stereo_enabled;
+extern SLONG POKEYSND_playback_freq;
+extern UBYTE POKEYSND_num_pokeys;
+extern int POKEYSND_snd_flags;
+extern int POKEYSND_volume;
 
-extern void (*Update_pokey_sound)(uint16 addr, uint8 val, uint8 /*chip*/, uint8 gain);
+extern int POKEYSND_enable_new_pokey;
+extern int POKEYSND_stereo_enabled;
+extern int POKEYSND_serio_sound_enabled;
+extern int POKEYSND_console_sound_enabled;
+extern int POKEYSND_bienias_fix;
 
-void Pokey_sound_init(uint32 freq17, uint16 playback_freq, uint8 num_pokeys,
-                     unsigned int flags
+extern void (*POKEYSND_Process_ptr)(void *sndbuffer, int sndn);
+extern void (*POKEYSND_Update_ptr)(UWORD addr, UBYTE val, UBYTE chip, UBYTE gain);
+extern void (*POKEYSND_UpdateSerio)(int out, UBYTE data);
+extern void (*POKEYSND_UpdateConsol_ptr)(int set);
+extern void (*POKEYSND_UpdateVolOnly)(void);
+
+int POKEYSND_Init(uint32_t freq17, int playback_freq, UBYTE num_pokeys,
+                     int flags
                      );
-void Pokey_process(void *sndbuffer, unsigned sndn);
+void POKEYSND_Update(UWORD addr, UBYTE val, UBYTE /*chip*/, UBYTE gain);
+void POKEYSND_UpdateConsol(int set);
+
+/* Fill sndbuffer with sndn samples of audio. Number of bytes written to
+   sndbuffer is sndn with 8-bit sound, and 2*sndn with 16-bit sound. sndn
+   must be a multiple of POKEYSND_num_pokeys. */
+void Pokey_process(void *sndbuffer, int sndn);
+void Pokey_sound_init(uint32_t freq17, UWORD playback_freq, UBYTE num_pokeys, unsigned int flags);
+void POKEYSND_SetMzQuality(int quality);
+
+/* Volume only emulations declarations */
+#define	POKEYSND_SAMPBUF_MAX	2000
+extern int	POKEYSND_sampbuf_val[POKEYSND_SAMPBUF_MAX];	/* volume values */
+extern int	POKEYSND_sampbuf_cnt[POKEYSND_SAMPBUF_MAX];	/* relative start time */
+extern int	POKEYSND_sampbuf_ptr;                    /* pointer to sampbuf */
+extern int	POKEYSND_sampbuf_rptr;                   /* pointer to read from sampbuf */
+extern int	POKEYSND_sampbuf_last;                   /* last absolute time */
+extern int	POKEYSND_sampbuf_AUDV[4 * MAXPOKEYS];	/* prev. channel volume */
+extern int	POKEYSND_sampbuf_lastval;		/* last volume */
+extern int	POKEYSND_sampout;			/* last out volume */
+extern int	POKEYSND_samp_freq;
+extern int	POKEYSND_samp_consol_val;		/* actual value of console sound */
+
+#ifdef SYNCHRONIZED_SOUND
+extern UBYTE *POKEYSND_process_buffer;
+extern unsigned int POKEYSND_process_buffer_length;
+extern unsigned int POKEYSND_process_buffer_fill;
+extern void (*POKEYSND_GenerateSync)(unsigned int num_ticks);
+int POKEYSND_UpdateProcessBuffer(void);
+#endif /* SYNCHRONIZED_SOUND */
 
 #ifdef __cplusplus
 }
 
 #endif
-#endif
+#endif /* POKEYSND_H_ */

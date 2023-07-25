@@ -49,7 +49,21 @@ extern "C" {
  * - Will be used as a fallback for any missing entries in
  *   frontend language definition */
 
+//struct retro_core_option_v2_category option_cats_us[] = {
+//   { NULL, NULL, NULL },
+//};
+
 struct retro_core_option_v2_category option_cats_us[] = {
+   {
+      "audio",
+      "Audio",
+      "Configure pokey driver used and filter settings."
+   },
+   {
+      "input",
+      "Input",
+      "Configure controller hack, Digital and Analog Joystick settings."
+   },
    { NULL, NULL, NULL },
 };
 
@@ -87,12 +101,43 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled"
    },
    {
+      "a5200_artifacting_mode",
+      "Hi-Res Artifacting Mode",
+      NULL,
+      "Set Hi-Res Artifacting mode used.  Typically dependant on the actual emulated system.  Pick the color combination that pleases you.  None disables artifacting.  Good for games like A.E., Backgammon, Miniature Golf and several Atari 800 to Atari 5200 conversions ",
+      NULL,
+      NULL,
+      {
+         { "none", "None"},
+         { "blue/brown 1", NULL },
+         { "blue/brown 2",  NULL },
+         { "GTIA",  NULL },
+         { "CTIA",  NULL },
+         { NULL, NULL },
+      },
+      "none"
+   },
+   {
+      "a5200_enable_new_pokey",
+      "High Fidelity POKEY (Restart)",
+      NULL,
+      "Enable High Fidelity Pokey for better quality sound.  Disable for games that use digital sound (Berzerk)",
+      NULL,
+      "audio",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "enabled"
+   },
+   {
       "a5200_low_pass_filter",
       "Audio Filter",
       NULL,
       "Enable a low pass audio filter to soften the 'harsh' sound produced by the Atari 5200's POKEY chip.",
       NULL,
-      NULL,
+      "audio",
       {
          { "disabled", NULL },
          { "enabled",  NULL },
@@ -106,7 +151,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Specify the cut-off frequency of the low pass audio filter. A higher value increases the perceived 'strength' of the filter, since a wider range of the high frequency spectrum is attenuated.",
       NULL,
-      NULL,
+      "audio",
       {
          { "5",  "5%" },
          { "10", "10%" },
@@ -137,11 +182,25 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Apply gamepad input hacks required for specific games. 'Dual Stick' maps Player 2's joystick to the right analog stick of Player 1's RetroPad, enabling dual stick control in 'Robotron 2084' and 'Space Dungeon'. 'Swap Ports' maps Player 1 to port 2 and Player 2 to port 1 of the emulated console, correcting the swapped inputs of 'Wizard of Wor'.",
       NULL,
-      NULL,
+      "input",
       {
          { "disabled", NULL },
          { "dual_stick",  "Dual Stick" },
          { "swap_ports",  "Swap Ports" },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
+      "a5200_pause_is_reset",
+      "Pause acts as Reset",
+      NULL,
+      "Pressing the button assigned to Pause will send a reset instead.  Some games like Kangaroo and Pole Position need this in order to change game difficulty or number of players.",
+      NULL,
+      "input",
+      {
+         { "disabled", "Disabled" },
+         { "enabled",  "Enabled" },
          { NULL, NULL },
       },
       "disabled"
@@ -152,7 +211,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Set the effective range of the emulated analog joystick when using the gamepad's digital D-Pad for movement. Lower values equate to slower speeds. 'Auto' sets value based on cartridge checksum (requires good ROM dumps).",
       NULL,
-      NULL,
+      "input",
       {
          { "auto", "Auto" },
          { "5",    "5%" },
@@ -204,7 +263,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Set the effective range of the emulated analog joystick when using the gamepad's left analog stick for movement. Lower values equate to slower speeds. 'Auto' sets value based on cartridge checksum (requires good ROM dumps).",
       NULL,
-      NULL,
+      "input",
       {
          { "auto", "Auto" },
          { "5",    "5%" },
@@ -256,7 +315,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Configure movement speed response when tilting the gamepad's analog stick. 'Linear': Speed is directly proportional to stick displacement. 'Quadratic': Speed increases quadratically with stick displacement, enabling greater precision when making small movements without sacrificing maximum speed at full range.",
       NULL,
-      NULL,
+      "input",
       {
          { "linear",    "Linear" },
          { "quadratic", "Quadratic" },
@@ -270,7 +329,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Set the deadzone of the gamepad's analog sticks. May be used to eliminate controller drift.",
       NULL,
-      NULL,
+      "input",
       {
          { "0",  "0%" },
          { "3",  "3%" },
@@ -295,7 +354,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       NULL,
       "Set the device used for analog input.",
       NULL,
-      NULL,
+      "input",
       {
          { "analog_stick", "Analog Stick" },
          { "mouse", "Mouse" },

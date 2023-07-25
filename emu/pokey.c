@@ -85,7 +85,7 @@ UBYTE pot_scanline;
 
 UBYTE poly9_lookup[511];
 UBYTE poly17_lookup[16385];
-static ULONG random_scanline_counter;
+static uint32_t random_scanline_counter;
 
 UBYTE POKEY_GetByte(UWORD addr)
 {
@@ -237,23 +237,23 @@ void POKEY_PutByte(UWORD addr, UBYTE byte)
 	addr &= 0x0f;
 #endif
 	switch (addr) {
-	case _AUDC1:
+	case OFFSET_AUDC1:
 		AUDC[CHAN1] = byte;
-		Update_pokey_sound(_AUDC1, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC1, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDC2:
+	case OFFSET_AUDC2:
 		AUDC[CHAN2] = byte;
-		Update_pokey_sound(_AUDC2, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC2, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDC3:
+	case OFFSET_AUDC3:
 		AUDC[CHAN3] = byte;
-		Update_pokey_sound(_AUDC3, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC3, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDC4:
+	case OFFSET_AUDC4:
 		AUDC[CHAN4] = byte;
-		Update_pokey_sound(_AUDC4, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC4, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDCTL:
+	case OFFSET_AUDCTL:
 		AUDCTL[0] = byte;
 
 		/* determine the base multiplier for the 'div by n' calculations */
@@ -263,38 +263,38 @@ void POKEY_PutByte(UWORD addr, UBYTE byte)
 			Base_mult[0] = DIV_64;
 
 		Update_Counter((1 << CHAN1) | (1 << CHAN2) | (1 << CHAN3) | (1 << CHAN4));
-		Update_pokey_sound(_AUDCTL, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDCTL, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDF1:
+	case OFFSET_AUDF1:
 		AUDF[CHAN1] = byte;
 		Update_Counter((AUDCTL[0] & CH1_CH2) ? ((1 << CHAN2) | (1 << CHAN1)) : (1 << CHAN1));
-		Update_pokey_sound(_AUDF1, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF1, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDF2:
+	case OFFSET_AUDF2:
 		AUDF[CHAN2] = byte;
 		Update_Counter(1 << CHAN2);
-		Update_pokey_sound(_AUDF2, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF2, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDF3:
+	case OFFSET_AUDF3:
 		AUDF[CHAN3] = byte;
 		Update_Counter((AUDCTL[0] & CH3_CH4) ? ((1 << CHAN4) | (1 << CHAN3)) : (1 << CHAN3));
-		Update_pokey_sound(_AUDF3, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF3, byte, 0, SOUND_GAIN);
 		break;
-	case _AUDF4:
+	case OFFSET_AUDF4:
 		AUDF[CHAN4] = byte;
 		Update_Counter(1 << CHAN4);
-		Update_pokey_sound(_AUDF4, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF4, byte, 0, SOUND_GAIN);
 		break;
-	case _IRQEN:
+	case OFFSET_IRQEN:
 		IRQEN = byte;
 		IRQST |= ~byte & 0xf7;	/* Reset disabled IRQs except XMTDONE */
 		if ((~IRQST & IRQEN) == 0)
 			IRQ = 0;
 		break;
-	case _SKRES:
+	case OFFSET_SKRES:
 		SKSTAT |= 0xe0;
 		break;
-	case _POTGO:
+	case OFFSET_POTGO:
     //POT_all = 0xFF;
 		if (!(SKCTLS & 4)) {
 			pot_scanline = 0;	/* slow pot mode */
@@ -303,43 +303,43 @@ void POKEY_PutByte(UWORD addr, UBYTE byte)
     //  pot_scanline = 226;//228;  
       //INPUT_potgo(&POT_all);
 		break;
-	case _SEROUT:
+	case OFFSET_SEROUT:
 		if ((SKCTLS & 0x70) == 0x20 && POKEY_siocheck())
 			SIO_PutByte(byte);
 		DELAYED_SEROUT_IRQ = SEROUT_INTERVAL;
 		IRQST |= 0x08;
 		DELAYED_XMTDONE_IRQ = XMTDONE_INTERVAL;
 		break;
-	case _STIMER:
+	case OFFSET_STIMER:
 		DivNIRQ[CHAN1] = DivNMax[CHAN1];
 		DivNIRQ[CHAN2] = DivNMax[CHAN2];
 		DivNIRQ[CHAN4] = DivNMax[CHAN4];
-		Update_pokey_sound(_STIMER, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(_STIMER, byte, 0, SOUND_GAIN);
 		break;
-	case _SKCTLS:
+	case OFFSET_SKCTL:
 		SKCTLS = byte;
-    Update_pokey_sound(_SKCTLS, byte, 0, SOUND_GAIN);
+    POKEYSND_Update(OFFSET_SKCTL, byte, 0, SOUND_GAIN);
 		if (byte & 4)
 			pot_scanline = 228;	/* fast pot mode - return results immediately */
 		break;
 #ifdef STEREO_SOUND
-	case _AUDC1 + _POKEY2:
+	case OFFSET_AUDC1 + OFFSET_POKEY2:
 		AUDC[CHAN1 + CHIP2] = byte;
-		Update_pokey_sound(_AUDC1, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC1, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDC2 + _POKEY2:
+	case OFFSET_AUDC2 + OFFSET_POKEY2:
 		AUDC[CHAN2 + CHIP2] = byte;
-		Update_pokey_sound(_AUDC2, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC2, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDC3 + _POKEY2:
+	case OFFSET_AUDC3 + OFFSET_POKEY2:
 		AUDC[CHAN3 + CHIP2] = byte;
-		Update_pokey_sound(_AUDC3, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC3, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDC4 + _POKEY2:
+	case OFFSET_AUDC4 + OFFSET_POKEY2:
 		AUDC[CHAN4 + CHIP2] = byte;
-		Update_pokey_sound(_AUDC4, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDC4, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDCTL + _POKEY2:
+	case OFFSET_AUDCTL + OFFSET_POKEY2:
 		AUDCTL[1] = byte;
 		/* determine the base multiplier for the 'div by n' calculations */
 		if (byte & CLOCK_15)
@@ -347,26 +347,26 @@ void POKEY_PutByte(UWORD addr, UBYTE byte)
 		else
 			Base_mult[1] = DIV_64;
 
-		Update_pokey_sound(_AUDCTL, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDCTL, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDF1 + _POKEY2:
+	case OFFSET_AUDF1 + OFFSET_POKEY2:
 		AUDF[CHAN1 + CHIP2] = byte;
-		Update_pokey_sound(_AUDF1, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF1, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDF2 + _POKEY2:
+	case OFFSET_AUDF2 + OFFSET_POKEY2:
 		AUDF[CHAN2 + CHIP2] = byte;
-		Update_pokey_sound(_AUDF2, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF2, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDF3 + _POKEY2:
+	case OFFSET_AUDF3 + OFFSET_POKEY2:
 		AUDF[CHAN3 + CHIP2] = byte;
-		Update_pokey_sound(_AUDF3, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF3, byte, 1, SOUND_GAIN);
 		break;
-	case _AUDF4 + _POKEY2:
+	case OFFSET_AUDF4 + OFFSET_POKEY2:
 		AUDF[CHAN4 + CHIP2] = byte;
-		Update_pokey_sound(_AUDF4, byte, 1, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_AUDF4, byte, 1, SOUND_GAIN);
 		break;
-	case _STIMER + _POKEY2:
-		Update_pokey_sound(_STIMER, byte, 1, SOUND_GAIN);
+	case OFFSET_STIMER + OFFSET_POKEY2:
+		POKEYSND_Update(OFFSET_STIMER, byte, 1, SOUND_GAIN);
 		break;
 #endif
 	}
@@ -375,7 +375,7 @@ void POKEY_PutByte(UWORD addr, UBYTE byte)
 void POKEY_Initialise(void)
 {
 	int i;
-	ULONG reg;
+	uint32_t reg;
 
 	/* Initialise Serial Port Interrupts */
 	DELAYED_SERIN_IRQ = 0;
@@ -541,10 +541,10 @@ void POKEYStateRead(void)
 	ReadUBYTE(&AUDC[0], 4);
 	ReadUBYTE(&AUDCTL[0], 1);
 	for (i = 0; i < 4; i++) {
-		POKEY_PutByte((UWORD) (_AUDF1 + i * 2), AUDF[i]);
-		POKEY_PutByte((UWORD) (_AUDC1 + i * 2), AUDC[i]);
+		POKEY_PutByte((UWORD) (OFFSET_AUDF1 + i * 2), AUDF[i]);
+		POKEY_PutByte((UWORD) (OFFSET_AUDC1 + i * 2), AUDC[i]);
 	}
-	POKEY_PutByte(_AUDCTL, AUDCTL[0]);
+	POKEY_PutByte(AUDCTL, AUDCTL[0]);
 
 	ReadINT(&DivNIRQ[0], 4);
 	ReadINT(&DivNMax[0], 4);

@@ -1,35 +1,61 @@
-#ifndef _POKEY_H_
-#define _POKEY_H_
+#ifndef POKEY_H_
+#define POKEY_H_
 
 #include "atari.h"
 
-#define _AUDF1 0x00
-#define _AUDC1 0x01
-#define _AUDF2 0x02
-#define _AUDC2 0x03
-#define _AUDF3 0x04
-#define _AUDC3 0x05
-#define _AUDF4 0x06
-#define _AUDC4 0x07
-#define _AUDCTL 0x08
+#define OFFSET_AUDF1 0x00
+#define OFFSET_AUDC1 0x01
+#define OFFSET_AUDF2 0x02
+#define OFFSET_AUDC2 0x03
+#define OFFSET_AUDF3 0x04
+#define OFFSET_AUDC3 0x05
+#define OFFSET_AUDF4 0x06
+#define OFFSET_AUDC4 0x07
+#define OFFSET_AUDCTL 0x08
+#define OFFSET_STIMER 0x09
+#define OFFSET_SKRES 0x0a
+#define OFFSET_POTGO 0x0b
+#define OFFSET_SEROUT 0x0d
+#define OFFSET_IRQEN 0x0e
+#define OFFSET_SKCTL 0x0f
 
-/* offset to second pokey chip (STEREO expansion) */
-#define _POKEY2 0x10 
+#define OFFSET_POT0 0x00
+#define OFFSET_POT1 0x01
+#define OFFSET_POT2 0x02
+#define OFFSET_POT3 0x03
+#define OFFSET_POT4 0x04
+#define OFFSET_POT5 0x05
+#define OFFSET_POT6 0x06
+#define OFFSET_POT7 0x07
+#define OFFSET_ALLPOT 0x08
+#define OFFSET_KBCODE 0x09
+#define OFFSET_RANDOM 0x0a
+#define OFFSET_SERIN 0x0d
+#define OFFSET_IRQST 0x0e
+#define OFFSET_SKSTAT 0x0f
+
+#define OFFSET_POKEY2 0x10			/* offset to second pokey chip (STEREO expansion) */
 
 extern UBYTE KBCODE;
 extern UBYTE IRQST;
 extern UBYTE IRQEN;
 extern UBYTE SKSTAT;
+extern UBYTE SKCTL;
 extern int DELAYED_SERIN_IRQ;
 extern int DELAYED_SEROUT_IRQ;
+extern int DELAYED_XMTDONE_IRQ;
 
 extern UBYTE POT_input[8];
 
+uint32_t GetRandomCounter(void);
+void POKEY_SetRandomCounter(uint32_t value);
 UBYTE POKEY_GetByte(UWORD addr);
 void POKEY_PutByte(UWORD addr, UBYTE byte);
 void POKEY_Initialise(void);
 void POKEY_Frame(void);
 void POKEY_Scanline(void);
+void POKEY_StateSave(void);
+void POKEY_StateRead(void);
 
 /* CONSTANT DEFINITIONS */
 
@@ -85,4 +111,4 @@ extern int Base_mult[MAXPOKEYS];	/* selects either 64Khz or 15Khz clock mult */
 extern UBYTE poly9_lookup[POLY9_SIZE];
 extern UBYTE poly17_lookup[16385];
 
-#endif
+#endif /* POKEY_H_ */

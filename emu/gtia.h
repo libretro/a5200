@@ -102,8 +102,10 @@ extern UBYTE VDELAY;
 
 extern UBYTE TRIG[4];
 
+extern UBYTE consol_mask;
 extern int consol_index;
 extern UBYTE consol_table[3];
+extern int atari_speaker;
 
 void GTIA_Initialise(void);
 void GTIA_Frame(void);

@@ -74,7 +74,7 @@ UBYTE GRACTL;
 
 /* Internal GTIA state ----------------------------------------------------- */
 
-static int atari_speaker;
+int atari_speaker;
 int consol_index = 0;
 UBYTE consol_table[3];
 UBYTE consol_mask;

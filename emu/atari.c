@@ -288,6 +288,8 @@ int Atari800_Exit(void) {
 }
 
 UBYTE Atari800_GetByte(UWORD addr) {
+	UBYTE byte;
+
 	switch (addr & 0xff00) {
 	case 0x4f00:
 	case 0x8f00:
@@ -297,6 +299,10 @@ UBYTE Atari800_GetByte(UWORD addr) {
 	case 0x9f00:
 		CART_BountyBob2(addr);
 		return 0;
+	case 0xbf00:
+		byte = CART_5200SuperCartGetByte(addr);
+		return byte;
+		break;
 	case 0xd000:				/* GTIA */
 	case 0xc000:				/* GTIA - 5200 */
 		return GTIA_GetByte(addr);
@@ -327,7 +333,10 @@ void Atari800_PutByte(UWORD addr, UBYTE byte) {
     case 0x9f00:
       CART_BountyBob2(addr);
       break;
-    case 0xd000:				/* GTIA */
+	case 0xbf00:
+	  CART_5200SuperCartPutByte(addr, byte);
+	  break;
+	case 0xd000:				/* GTIA */
     case 0xc000:				/* GTIA - 5200 */
       GTIA_PutByte(addr, byte);
       break;
