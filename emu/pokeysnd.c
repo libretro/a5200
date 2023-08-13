@@ -250,8 +250,7 @@ static void init_vol_only(void)
 #endif /* STEREO_SOUND */
 }
 
-//int POKEYSND_DoInit(void)
-Pokey_sound_init(uint32_t freq17, UWORD playback_freq, UBYTE num_pokeys, unsigned int flags)
+void Pokey_sound_init(uint32_t freq17, UWORD playback_freq, UBYTE num_pokeys, unsigned int flags)
 {
 	//SndSave_CloseSoundFile();
 
@@ -261,8 +260,6 @@ Pokey_sound_init(uint32_t freq17, UWORD playback_freq, UBYTE num_pokeys, unsigne
 		MZPOKEYSND_Init(freq17, playback_freq, num_pokeys, flags, mz_quality);
 	else
 		pokeysnd_init_rf(freq17, playback_freq, num_pokeys, flags);
-
-	return;
 }
 
 #if 0

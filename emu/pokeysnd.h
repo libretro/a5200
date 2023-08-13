@@ -81,7 +81,7 @@ extern "C" {
 /* init flags */
 #define POKEYSND_BIT16	1
 
-extern SLONG POKEYSND_playback_freq;
+extern int POKEYSND_playback_freq;
 extern UBYTE POKEYSND_num_pokeys;
 extern int POKEYSND_snd_flags;
 extern int POKEYSND_volume;
