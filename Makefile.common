@@ -29,7 +29,6 @@ SOURCES_C := \
 	$(CORE_SRC_DIR)/pokey.c \
 	$(CORE_SRC_DIR)/pokeysnd.c \
 	$(CORE_SRC_DIR)/remez.c \
-	$(CORE_SRC_DIR)/pokeysnd.c \
 	$(CORE_SRC_DIR)/rtime8.c \
 	$(CORE_SRC_DIR)/sio.c \
 	$(CORE_SRC_DIR)/statesav.c \
