@@ -8,5 +8,8 @@
 #define CONSOLE_SOUND 1
 //#define SYNCHRONIZED_SOUND 1
 
+/* retro_endianness.h defines WORDS_BIGENDIAN if necessarry.  */
+#include <retro_endianness.h>
+
 // Define to allow stereo sound. 
 //#define STEREO_SOUND 1
