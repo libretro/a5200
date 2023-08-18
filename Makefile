@@ -165,25 +165,24 @@ else ifeq ($(platform), ngc)
 	STATIC_LINKING=1
 	FLAGS += -DMSB_FIRST
 
-# Nintendo Wii
-else ifeq ($(platform), wii)
-	EXT=a
-	TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
-	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
-	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
-	CFLAGS += -DGEKKO -DHW_RVL -mrvl -mcpu=750 -meabi -mhard-float -D__ppc__ -DMSB_FIRST
-	STATIC_LINKING=1
-	FLAGS += -DMSB_FIRST
-
-# Nintendo Wii
-else ifeq ($(platform), wiiu)
-	EXT=a
-	TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
-	CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
-	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
-	CFLAGS += -DGEKKO -DWIIU -DHW_RVL -mrvl -mcpu=750 -meabi -mhard-float -D__ppc__ -DMSB_FIRST
-	STATIC_LINKING=1
-	FLAGS += -DMSB_FIRST
+# Nintendo Game Cube / Wii / WiiU
+else ifneq (,$(filter $(platform), ngc wii wiiu))
+   TARGET := $(TARGET_NAME)_libretro_$(platform).a
+   CC = $(DEVKITPPC)/bin/powerpc-eabi-gcc$(EXE_EXT)
+   CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
+   AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)  
+   PLATFORM_DEFINES += -DGEKKO -mcpu=750 -meabi -mhard-float -DHAVE_STRTOF_L -DHAVE_LOCALE
+   PLATFORM_DEFINES += -U__INT32_TYPE__ -U __UINT32_TYPE__ -D__INT32_TYPE__=int -D_GNU_SOURCE
+   STATIC_LINKING = 1
+   HAVE_COMPAT = 1
+   ifneq (,$(findstring wiiu,$(platform)))
+      CFLAGS += -DDEFAULT_CFG_NAME="\"sd:/retroarch/cores/system/atari800.cfg\""
+      PLATFORM_DEFINES += -DWIIU -DHW_RVL
+   else ifneq (,$(findstring wii,$(platform)))
+      PLATFORM_DEFINES += -DHW_RVL -mrvl
+   else ifneq (,$(findstring ngc,$(platform)))
+      PLATFORM_DEFINES += -DHW_DOL -mrvl
+   endif
 
 # Nintendo Switch (libtransistor)
 else ifeq ($(platform), switch)

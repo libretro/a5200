@@ -314,7 +314,7 @@ void POKEY_PutByte(UWORD addr, UBYTE byte)
 		DivNIRQ[CHAN1] = DivNMax[CHAN1];
 		DivNIRQ[CHAN2] = DivNMax[CHAN2];
 		DivNIRQ[CHAN4] = DivNMax[CHAN4];
-		POKEYSND_Update(_STIMER, byte, 0, SOUND_GAIN);
+		POKEYSND_Update(OFFSET_STIMER, byte, 0, SOUND_GAIN);
 		break;
 	case OFFSET_SKCTL:
 		SKCTLS = byte;
@@ -544,7 +544,7 @@ void POKEYStateRead(void)
 		POKEY_PutByte((UWORD) (OFFSET_AUDF1 + i * 2), AUDF[i]);
 		POKEY_PutByte((UWORD) (OFFSET_AUDC1 + i * 2), AUDC[i]);
 	}
-	POKEY_PutByte(AUDCTL, AUDCTL[0]);
+	POKEY_PutByte(OFFSET_AUDCTL, AUDCTL[0]);
 
 	ReadINT(&DivNIRQ[0], 4);
 	ReadINT(&DivNMax[0], 4);
