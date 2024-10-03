@@ -83,7 +83,9 @@ static const struct cart_info_t cart_info_table[] = {
 	{ "f8973db8dc272c2e5eb7b8dbb5c0cc3b", CART_5200_NS_16, 1,  1.0f,  1.0f, "BerZerk (USA)" },
 	{ "139229eed18032fdea735fa5360bd551", CART_5200_32,    1,  1.0f,  1.0f, "Beef Drop Ultimate SD Edition" },
 	{ "81790daff7f7646a6c371c056622be9c", CART_5200_40,    1,  1.0f,  1.0f, "Bounty Bob Strikes Back (Merged) (Big Five Software) (U)" },
+	{ "5d5a75ac53230915701bc918249f1055", CART_5200_40_ALT,1,  1.0f,  1.0f, "Bounty Bob Strikes Back! (1984)(Big Five Software)(US)" },
 	{ "a074a1ff0a16d1e034ee314b85fa41e9", CART_5200_EE_16, 1,  1.0f,  1.0f, "Buck Rogers - Planet of Zoom (USA)" },
+	{ "f345dd189879f8d13e4c8c5737279fa3", CART_5200_EE_16, 1,  1.0f,  1.0f, "Buck Rogers - Planet of Zoom (USA)[a]" },
 	{ "713feccd8f2722f2e9bdcab98e25a35f", CART_5200_32,    1,  1.0f,  1.0f, "Buried Bucks (XL Conversion)" },
 	{ "3147ad22f8d5f46b1ef40a39da3a3de1", CART_5200_32,    1,  1.0f,  1.0f, "Captain Beeble (XL Conversion)" },
 	{ "79335deb06a1ef532fea8eee8012ecde", CART_5200_NS_16, 1,  1.0f,  1.0f, "Capture the Flag" },
@@ -140,6 +142,8 @@ static const struct cart_info_t cart_info_table[] = {
 	{ "a8ee72c80491ce33e24b7f56c2865a27", CART_5200_32,    1,  1.0f,  1.0f, "Freecell XE (Conversion)" },
 	{ "2c89c9444f99fd7ac83f88278e6772c6", CART_5200_8,     1,  1.0f,  1.0f, "Frogger (1983) (Parker Bros)" },
 	{ "d8636222c993ca71ca0904c8d89c4411", CART_5200_EE_16, 1,  1.0f,  1.0f, "Frogger II - Threeedeep! (USA)" },
+	{ "8e03034fc42ceaa5f7688af08c1f077c", CART_5200_EE_16, 1,  1.0f,  1.0f, "Frogger II - Threeedeep! (US)[a]" },
+	{ "d1a3b6613b03716af6aefe21d1bfdf07", CART_5200_EE_16, 1,  1.0f,  1.0f, "Frogger II - Threeedeep! (US)[o2][a]" },
 	{ "98113c00a7c82c83ee893d8e9352aa7a", CART_5200_8,     1,  1.0f,  1.0f, "Galactic_Chase" },
 	{ "3ace7c591a88af22bac0c559bbb08f03", CART_5200_8,     1,  1.0f,  1.0f, "Galaxian (1982) (Atari)" },
 	{ "4012282da62c0d72300294447ef6b9a2", CART_5200_32,    1,  1.0f,  1.0f, "Gateway to Apshai (XL Conversion)" },
@@ -149,6 +153,7 @@ static const struct cart_info_t cart_info_table[] = {
 	{ "dc271e475b4766e80151f1da5b764e52", CART_5200_32,    1,  1.0f,  1.0f, "Gremlins (USA)" },
 	{ "af6a7429a39039d04acf69f0cd6321a2", CART_5200_8,     1,  1.0f,  1.0f, "Gunpower Charlie" },
 	{ "dacc0a82e8ee0c086971f9d9bac14127", CART_5200_EE_16, 1,  1.0f,  1.0f, "Gyruss (USA)" },
+	{ "9983ab618fac2469f82bac1fc19f895b", CART_5200_EE_16, 1,  1.0f,  1.0f, "Gyruss (USA) (Alt)" },
 	{ "b7617ac90462ef13f8350e32b8198873", CART_5200_EE_16, 1,  1.0f,  1.0f, "Gyruss (Autofire Hack)" },
 	{ "f8f0e0a6dc2ffee41b2a2dd736cba4cd", CART_5200_NS_16, 1,  1.0f,  1.0f, "H.E.R.O. (USA)" },
 	{ "3491fa368ae42766a83a43a627496c41", CART_5200_EE_16, 1,  1.0f,  1.0f, "Hangly Pollux" },
@@ -169,6 +174,7 @@ static const struct cart_info_t cart_info_table[] = {
 	{ "9584d143be1871241e4a0d038e8e1468", CART_5200_32,    1,  1.0f,  1.0f, "Juno First (XL Conversion)" },
 	{ "92fd2f43bc0adf2f704666b5244fadf1", CART_5200_4,     1,  1.0f,  1.0f, "Kaboom! (USA)" },
 	{ "796d2c22f8205fb0ce8f1ee67c8eb2ca", CART_5200_EE_16, 1,  1.0f,  1.0f, "Kangaroo (USA)" },
+	{ "22097e3b37e4f1b68e86ad3787575cab", CART_5200_EE_16, 1,  1.0f,  1.0f, "Kangaroo (US)[b2]" },
 	{ "f25a084754ea4d37c2fb1dc8ca6dc51b", CART_5200_8,     1,  1.0f,  1.0f, "Keystone Kapers (USA)" },
 	{ "3b03e3cda8e8aa3beed4c9617010b010", CART_5200_32,    1,  1.0f,  1.0f, "Koffi - Yellow Kopter (USA) (Unl)" },
 	{ "03d0d59c5382b0a34a158e74e9bfce58", CART_5200_8,     1,  1.0f,  1.0f, "Kid Grid" },
@@ -236,6 +242,7 @@ static const struct cart_info_t cart_info_table[] = {
 	{ "e056001d304db597bdd21b2968fcc3e6", CART_5200_32,    1,  1.0f,  1.0f, "RealSports Basketball (USA)" },
 	{ "022c47b525b058796841134bb5c75a18", CART_5200_EE_16, 1,  1.0f,  1.0f, "RealSports Football (USA)" },
 	{ "3074fad290298d56c67f82e8588c5a8b", CART_5200_EE_16, 1,  1.0f,  1.0f, "RealSports Soccer (USA)" },
+	{ "3832950df7b057b02bd4c83642a75d17", CART_5200_EE_16, 1,  1.0f,  1.0f, "RealSports Soccer (US)[a]" },
 	{ "7e683e571cbe7c77f76a1648f906b932", CART_5200_EE_16, 1,  1.0f,  1.0f, "RealSports Tennis (USA)" },
 	{ "0dc44c5bf0829649b7fec37cb0a8186b", CART_5200_32,    1,  1.0f,  1.0f, "Rescue on Fractalus! (USA)" },
 	{ "ddf7834a420f1eaae20a7a6255f80a99", CART_5200_EE_16, 1,  1.0f,  1.0f, "Road Runner (USA) (Proto)" },
@@ -264,6 +271,7 @@ static const struct cart_info_t cart_info_table[] = {
 	{ "595703dc459cd51fed6e2a191c462969", CART_5200_EE_16, 1,  1.0f,  1.0f, "Stargate (1984) (Atari)" },
 	{ "8378e0f92e9365a6ad42efc9b973724a", CART_5200_NS_16, 1,  1.0f,  1.0f, "Star Island" },
 	{ "e2d3a3e52bb4e3f7e489acd9974d68e2", CART_5200_EE_16, 0,  0.7f,  1.0f, "Star Raiders (USA)" },
+	{ "64579ed5a28e3174262aa5283e41b66a", CART_5200_EE_16, 0,  0.7f,  1.0f, "Star Raiders (USA) (Alternate)" },
 	{ "0fe34d98a055312aba9ea3cb82d3ee2a", CART_5200_32,    0,  1.0f,  1.0f, "Star Raiders 5200(shield2-02)(32K)" },
 	{ "feacc7a44f9e92d245b2cb2485b48bb6", CART_5200_NS_16, 1,  1.0f,  1.0f, "Star Rider" },
 	{ "c959b65be720a03b5479650a3af5a511", CART_5200_EE_16, 1,  1.0f,  1.0f, "Star Trek - Strategic Operations Simulator (USA)" },
@@ -337,7 +345,10 @@ void CART_BountyBob1(UWORD addr)
 {
 	if (addr >= 0x4ff6 && addr <= 0x4ff9) {
 		addr -= 0x4ff6;
-		CopyROM(0x4000, 0x4fff, cart_image + addr * 0x1000);
+		if (cart_info.type == CART_5200_40_ALT)
+			CopyROM(0x4000, 0x4fff, cart_image + 0x2000 + addr * 0x1000);
+		else
+			CopyROM(0x4000, 0x4fff, cart_image + addr * 0x1000);
 	}
 }
 
@@ -345,7 +356,10 @@ void CART_BountyBob2(UWORD addr)
 {
 	if (addr >= 0x5ff6 && addr <= 0x5ff9) {
 		addr -= 0x5ff6;
-		CopyROM(0x5000, 0x5fff, cart_image + 0x4000 + addr * 0x1000);
+		if (cart_info.type == CART_5200_40_ALT)
+			CopyROM(0x5000, 0x5fff, cart_image + 0x6000 + addr * 0x1000);
+		else
+			CopyROM(0x5000, 0x5fff, cart_image + 0x4000 + addr * 0x1000);
 	}
 }
 
@@ -446,7 +460,7 @@ int CART_Insert(const uint8_t *data, size_t size)
 		if (string_is_equal(md5_hash, cart_info_entry->md5))
 		{
 			memcpy(&cart_info, cart_info_entry, sizeof(cart_info));
-			a5200_log(RETRO_LOG_INFO, "Detected cart: %s\n", cart_info.name);
+			a5200_log(RETRO_LOG_INFO, "Detected cart: %s type: %d\n", cart_info.name, cart_info.type);
 			break;
 		}
 
@@ -492,6 +506,14 @@ void CART_Start(void) {
 		CopyROM(0x5000, 0x5fff, cart_image + 0x4000);
 		CopyROM(0x8000, 0x9fff, cart_image + 0x8000);
 		CopyROM(0xa000, 0xbfff, cart_image + 0x8000);
+		SetHARDWARE(0x4ff6, 0x4ff9);
+		SetHARDWARE(0x5ff6, 0x5ff9);
+		break;
+	case CART_5200_40_ALT:
+		CopyROM(0x4000, 0x4fff, cart_image + 0x2000);
+		CopyROM(0x5000, 0x5fff, cart_image + 0x6000);
+		CopyROM(0x8000, 0x9fff, cart_image);
+		CopyROM(0xa000, 0xbfff, cart_image);
 		SetHARDWARE(0x4ff6, 0x4ff9);
 		SetHARDWARE(0x5ff6, 0x5ff9);
 		break;

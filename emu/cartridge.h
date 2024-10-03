@@ -16,6 +16,8 @@
 #define CART_5200_256   73
 #define CART_5200_512   74
 
+#define CART_5200_40_ALT	99 
+
 #define CART_CANT_OPEN    -1 /* Can't open cartridge image file */
 #define CART_BAD_FORMAT   -2 /* Unknown cartridge format */
 
