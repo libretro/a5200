@@ -294,15 +294,16 @@ UBYTE Atari800_GetByte(UWORD addr) {
 	case 0x4f00:
 	case 0x8f00:
 		CART_BountyBob1(addr);
-		return 0;
+		byte = dGetByte(addr);
+		return byte;
 	case 0x5f00:
 	case 0x9f00:
 		CART_BountyBob2(addr);
-		return 0;
+		byte = dGetByte(addr);
+		return byte;
 	case 0xbf00:
 		byte = CART_5200SuperCartGetByte(addr);
 		return byte;
-		break;
 	case 0xd000:				/* GTIA */
 	case 0xc000:				/* GTIA - 5200 */
 		return GTIA_GetByte(addr);
